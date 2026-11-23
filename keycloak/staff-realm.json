@@ -1,0 +1,148 @@
+{
+  "realm": "staff",
+  "displayName": "Delivery Platform - Restaurant staff",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 28800,
+  "roles": {
+    "realm": [
+      { "name": "ADMIN", "description": "Platform operator: creates restaurants and assigns staff" },
+      { "name": "MANAGER", "description": "Restaurant manager: menus, settings, reports" },
+      { "name": "STAFF", "description": "Kitchen / counter staff: order board" },
+      { "name": "CATALOG_READER", "description": "Service role: read the internal catalog API (webshop service account)" },
+      { "name": "DRIVER", "description": "Delivery driver: picks up and delivers orders" },
+      { "name": "offline_access" },
+      { "name": "uma_authorization" },
+      {
+        "name": "default-roles-staff",
+        "composite": true,
+        "composites": { "realm": ["offline_access", "uma_authorization"] }
+      }
+    ]
+  },
+  "defaultRole": { "name": "default-roles-staff" },
+  "clients": [
+    {
+      "clientId": "backoffice-ui",
+      "name": "Back office (React SPA)",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*", "http://localhost:5173/*"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*##http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-backoffice-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "backoffice-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "webshop-service",
+      "name": "Webshop service (service-to-service)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${WEBSHOP_CLIENT_SECRET:webshop-service-secret}",
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience-backoffice-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "backoffice-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "username": "admin",
+      "email": "admin@delivery.test",
+      "emailVerified": true,
+      "firstName": "Platform",
+      "lastName": "Admin",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "admin123", "temporary": false }],
+      "realmRoles": ["default-roles-staff", "ADMIN"]
+    },
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "username": "napoli.manager",
+      "email": "manager@napoli.test",
+      "emailVerified": true,
+      "firstName": "Napoli",
+      "lastName": "Manager",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "manager123", "temporary": false }],
+      "realmRoles": ["default-roles-staff", "MANAGER", "STAFF"]
+    },
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "username": "napoli.kitchen",
+      "email": "kitchen@napoli.test",
+      "emailVerified": true,
+      "firstName": "Napoli",
+      "lastName": "Kitchen",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "kitchen123", "temporary": false }],
+      "realmRoles": ["default-roles-staff", "STAFF"]
+    },
+    {
+      "id": "44444444-4444-4444-4444-444444444444",
+      "username": "sushi.manager",
+      "email": "manager@sushi.test",
+      "emailVerified": true,
+      "firstName": "Sushi",
+      "lastName": "Manager",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "manager123", "temporary": false }],
+      "realmRoles": ["default-roles-staff", "MANAGER", "STAFF"]
+    },
+    {
+      "username": "service-account-webshop-service",
+      "enabled": true,
+      "serviceAccountClientId": "webshop-service",
+      "realmRoles": ["default-roles-staff", "CATALOG_READER"]
+    },
+    {
+      "username": "driver1",
+      "email": "driver1@delivery.test",
+      "emailVerified": true,
+      "firstName": "Alex",
+      "lastName": "Driver",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "driver123", "temporary": false }],
+      "realmRoles": ["default-roles-staff", "DRIVER"]
+    }
+  ]
+}

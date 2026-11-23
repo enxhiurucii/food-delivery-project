@@ -1,0 +1,69 @@
+server:
+  port: ${SERVER_PORT:8081}
+  shutdown: graceful
+
+spring:
+  application:
+    name: backoffice-service
+  threads:
+    virtual:
+      enabled: true
+  mongodb:
+    # directConnection=true works both inside docker-compose and from the host against a single-node replica set
+    uri: ${MONGODB_URI:mongodb://localhost:27017/backoffice?directConnection=true}
+  data:
+    mongodb:
+      auto-index-creation: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:backoffice}
+    password: ${RABBITMQ_PASSWORD:backoffice-secret}
+    virtual-host: ${RABBITMQ_VHOST:delivery}
+    publisher-confirm-type: simple
+    listener:
+      simple:
+        default-requeue-rejected: false   # exhausted retries go to the dead-letter queue
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # The issuer the BROWSER sees (validated against the token's "iss").
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/staff}
+          # Where THIS service fetches signing keys (container hostname inside docker-compose).
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/staff/protocol/openid-connect/certs}
+          audiences: backoffice-api
+
+app:
+  messaging:
+    exchange: orders.events
+    order-placed-queue: backoffice.order-placed
+  outbox:
+    poll-interval-ms: 1000
+    batch-size: 50
+  sse:
+    ticket-ttl: 30s
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  seed:
+    enabled: ${SEED_DEMO_DATA:true}
+  keycloak:
+    admin-url: ${KEYCLOAK_ADMIN_URL:http://localhost:8180}
+    staff-realm: staff
+    admin-username: ${KEYCLOAK_ADMIN_USERNAME:admin}
+    admin-password: ${KEYCLOAK_ADMIN_PASSWORD:admin}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

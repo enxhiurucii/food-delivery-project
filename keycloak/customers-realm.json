@@ -1,0 +1,71 @@
+{
+  "realm": "customers",
+  "displayName": "Delivery Platform",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "verifyEmail": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      { "name": "CUSTOMER", "description": "Can order from the webshop" },
+      { "name": "offline_access" },
+      { "name": "uma_authorization" },
+      {
+        "name": "default-roles-customers",
+        "composite": true,
+        "composites": { "realm": ["offline_access", "uma_authorization", "CUSTOMER"] }
+      }
+    ]
+  },
+  "defaultRole": { "name": "default-roles-customers" },
+  "clients": [
+    {
+      "clientId": "webshop-ui",
+      "name": "Webshop (React SPA)",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*", "http://localhost:5173/*"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*##http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-webshop-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "webshop-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "55555555-5555-5555-5555-555555555555",
+      "username": "customer@delivery.test",
+      "email": "customer@delivery.test",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Customer",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "customer123", "temporary": false }],
+      "realmRoles": ["default-roles-customers"]
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+# Delivery platform: one command to run everything.
+#
+# Expected folder layout (unzip the three archives side by side):
+#   delivery-platform/
+#   ├── docker-compose.yml        <- this file
+#   ├── keycloak/  rabbitmq/  nginx/
+#   ├── backoffice-service/
+#   ├── webshop-service/
+#   └── frontend/
+#
+#   docker compose up --build
+#
+# URLs: App http://localhost:3000 (back office) and http://localhost:3000/webshop (customers)
+#       Keycloak http://localhost:8180 (admin/admin) | RabbitMQ UI http://localhost:15672 (admin/admin)
+#       Back office API http://localhost:8081 | Webshop API http://localhost:8082
+# In production only the frontend/nginx would be published; the API ports are exposed here for local testing.
+
+name: delivery-platform
+
+services:
+  mongo:
+    image: mongo:8.0
+    # Single-node replica set: required for MongoDB transactions (transactional outbox).
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      # Initiates the replica set on first start, then reports healthy once it is up.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}).ok }"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    # Dev mode: built-in file database inside the container; realms + demo users imported from ./keycloak on start.
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # The URL browsers use. Every token gets iss=http://localhost:8180/realms/<realm>, also when requested
+      # from inside the docker network, so the services can validate one consistent issuer.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      WEBSHOP_CLIENT_SECRET: ${WEBSHOP_CLIENT_SECRET:-webshop-service-secret}
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      # The image has no curl; query the management port with bash's /dev/tcp.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  backoffice:
+    build: ./backoffice-service
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/backoffice?directConnection=true
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: backoffice
+      RABBITMQ_PASSWORD: ${BACKOFFICE_RABBIT_PASSWORD:-backoffice-secret}
+      RABBITMQ_VHOST: delivery
+      KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/staff
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/staff/protocol/openid-connect/certs
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080
+    ports:
+      - "8081:8081"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_started   # services fetch Keycloak keys lazily (first request), so no need to wait
+
+  webshop:
+    build: ./webshop-service
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/webshop?directConnection=true
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: webshop
+      RABBITMQ_PASSWORD: ${WEBSHOP_RABBIT_PASSWORD:-webshop-secret}
+      RABBITMQ_VHOST: delivery
+      KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/customers
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/customers/protocol/openid-connect/certs
+      BACKOFFICE_BASE_URL: http://backoffice:8081
+      BACKOFFICE_TOKEN_URI: http://keycloak:8080/realms/staff/protocol/openid-connect/token
+      BACKOFFICE_CLIENT_ID: webshop-service
+      BACKOFFICE_CLIENT_SECRET: ${WEBSHOP_CLIENT_SECRET:-webshop-service-secret}
+    ports:
+      - "8082:8082"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_started   # services fetch Keycloak keys lazily (first request), so no need to wait
+      backoffice:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    # React app (back office at /, webshop at /webshop) + nginx reverse proxy to both APIs (same origin, no CORS)
+    ports:
+      - "3000:80"
+    depends_on:
+      - backoffice
+      - webshop
+
+volumes:
+  mongo-data:

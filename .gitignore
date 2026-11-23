@@ -1,0 +1,20 @@
+# Gradle
+build/
+.gradle/
+
+# IDE
+.idea/
+*.iml
+out/
+
+# Node
+node_modules/
+dist/
+.env.local
+
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

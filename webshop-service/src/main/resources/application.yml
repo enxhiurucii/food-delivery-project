@@ -1,0 +1,79 @@
+server:
+  port: ${SERVER_PORT:8082}
+  shutdown: graceful
+
+spring:
+  application:
+    name: webshop-service
+  threads:
+    virtual:
+      enabled: true
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/webshop?directConnection=true}
+  data:
+    mongodb:
+      auto-index-creation: true
+  cache:
+    cache-names: catalog-restaurants,catalog-restaurant,catalog-menus
+    caffeine:
+      spec: maximumSize=500,expireAfterWrite=30s
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:webshop}
+    password: ${RABBITMQ_PASSWORD:webshop-secret}
+    virtual-host: ${RABBITMQ_VHOST:delivery}
+    publisher-confirm-type: simple
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+  security:
+    oauth2:
+      # Customer tokens (browser -> webshop)
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/customers}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/customers/protocol/openid-connect/certs}
+          audiences: webshop-api
+      # Service identity (webshop -> back office), OAuth2 client-credentials grant
+      client:
+        registration:
+          backoffice:
+            provider: keycloak-staff
+            client-id: ${BACKOFFICE_CLIENT_ID:webshop-service}
+            client-secret: ${BACKOFFICE_CLIENT_SECRET:webshop-service-secret}
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak-staff:
+            token-uri: ${BACKOFFICE_TOKEN_URI:http://localhost:8180/realms/staff/protocol/openid-connect/token}
+
+app:
+  backoffice:
+    base-url: ${BACKOFFICE_BASE_URL:http://localhost:8081}
+    connect-timeout: 2s
+    read-timeout: 5s
+  messaging:
+    exchange: orders.events
+    order-status-queue: webshop.order-status
+  outbox:
+    poll-interval-ms: 1000
+    batch-size: 50
+  sse:
+    ticket-ttl: 30s
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
